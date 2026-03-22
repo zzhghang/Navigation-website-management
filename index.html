@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>导航管理面板</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- 顶部导航栏 -->
+        <header class="header">
+            <div class="header-left">
+                <h1>🧭 导航管理面板</h1>
+                <div class="board-selector">
+                    <select id="boardSelect">
+                        <option value="default">默认看板</option>
+                    </select>
+                    <button id="addBoardBtn" class="btn-icon" title="新建看板">+</button>
+                </div>
+            </div>
+            <div class="header-right">
+                <button id="themeToggle" class="btn-icon" title="切换主题">🎨</button>
+                <button id="exportBtn" class="btn-icon" title="导出数据">📤</button>
+                <button id="importBtn" class="btn-icon" title="导入数据">📥</button>
+                <button id="historyBtn" class="btn-icon" title="活动历史">📋</button>
+                <input type="file" id="importFile" accept=".json" style="display: none;">
+            </div>
+        </header>
+
+        <!-- 标签导航 -->
+        <nav class="tab-nav">
+            <div class="tab-list" id="tabList">
+                <!-- 动态生成标签 -->
+            </div>
+            <button id="addTabBtn" class="btn-add-tab" title="添加标签">+ 新标签</button>
+        </nav>
+
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <div id="navContainer" class="nav-container">
+                <!-- 动态生成导航项 -->
+            </div>
+        </main>
+
+        <!-- 底部状态栏 -->
+        <footer class="footer">
+            <span id="statusText">就绪</span>
+            <span class="shortcuts-hint">快捷键: Ctrl+N 新建 | Ctrl+S 保存 | Ctrl+T 切换主题 | Delete 删除选中</span>
+        </footer>
+    </div>
+
+    <!-- 模态框：添加/编辑导航项 -->
+    <div id="itemModal" class="modal">
+        <div class="modal-content">
+            <h3 id="itemModalTitle">添加导航项</h3>
+            <form id="itemForm">
+                <input type="hidden" id="itemId">
+                <div class="form-group">
+                    <label>名称</label>
+                    <input type="text" id="itemName" required placeholder="输入导航名称">
+                </div>
+                <div class="form-group">
+                    <label>链接</label>
+                    <input type="url" id="itemUrl" required placeholder="https://example.com">
+                </div>
+                <div class="form-group">
+                    <label>图标</label>
+                    <div class="icon-input-wrapper">
+                        <input type="text" id="itemIcon" placeholder="输入emoji或图标URL">
+                        <button type="button" class="btn-icon-import" onclick="toggleIconPicker('itemIconPicker')" title="选择预设图标">🎨</button>
+                        <button type="button" class="btn-icon-import" onclick="document.getElementById('itemIconFile').click()" title="从文件夹导入图标">📁</button>
+                        <input type="file" id="itemIconFile" accept="image/*" style="display: none;">
+                    </div>
+                    <div id="itemIconPicker" class="icon-picker"></div>
+                    <div id="itemIconPreview" class="icon-preview"></div>
+                </div>
+                <div class="form-group">
+                    <label>优先级</label>
+                    <select id="itemPriority">
+                        <option value="low">低</option>
+                        <option value="medium" selected>中</option>
+                        <option value="high">高</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>所属标签</label>
+                    <select id="itemTab">
+                        <!-- 动态生成 -->
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>二级分类</label>
+                    <div class="category-input-wrapper">
+                        <input type="text" id="itemCategory" placeholder="输入或选择分类（可选）">
+                        <button type="button" class="btn-icon-import" onclick="toggleCategoryPicker()" title="选择已有分类">📂</button>
+                    </div>
+                    <div id="categoryPicker" class="category-picker"></div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="closeModal('itemModal')">取消</button>
+                    <button type="submit" class="btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 模态框：添加/编辑标签 -->
+    <div id="tabModal" class="modal">
+        <div class="modal-content">
+            <h3 id="tabModalTitle">添加标签</h3>
+            <form id="tabForm">
+                <input type="hidden" id="tabId">
+                <div class="form-group">
+                    <label>标签名称</label>
+                    <input type="text" id="tabName" required placeholder="输入标签名称">
+                </div>
+                <div class="form-group">
+                    <label>图标</label>
+                    <div class="icon-input-wrapper">
+                        <input type="text" id="tabIcon" placeholder="输入emoji">
+                        <button type="button" class="btn-icon-import" onclick="toggleIconPicker('tabIconPicker')" title="选择预设图标">🎨</button>
+                        <button type="button" class="btn-icon-import" onclick="document.getElementById('tabIconFile').click()" title="从文件夹导入图标">📁</button>
+                        <input type="file" id="tabIconFile" accept="image/*" style="display: none;">
+                    </div>
+                    <div id="tabIconPicker" class="icon-picker"></div>
+                    <div id="tabIconPreview" class="icon-preview"></div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="closeModal('tabModal')">取消</button>
+                    <button type="submit" class="btn-primary">保存</button>
+                    <button type="button" id="deleteTabBtn" class="btn-danger" style="display: none;">删除</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 模态框：新建看板 -->
+    <div id="boardModal" class="modal">
+        <div class="modal-content">
+            <h3>新建看板</h3>
+            <form id="boardForm">
+                <div class="form-group">
+                    <label>看板名称</label>
+                    <input type="text" id="boardName" required placeholder="输入看板名称">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="closeModal('boardModal')">取消</button>
+                    <button type="submit" class="btn-primary">创建</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 模态框：活动历史 -->
+    <div id="historyModal" class="modal">
+        <div class="modal-content modal-large">
+            <h3>活动历史</h3>
+            <div id="historyList" class="history-list">
+                <!-- 动态生成 -->
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn-secondary" onclick="closeModal('historyModal')">关闭</button>
+                <button type="button" class="btn-danger" onclick="clearHistory()">清空历史</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主题选择器 -->
+    <div id="themePanel" class="theme-panel">
+        <h4>选择主题</h4>
+        <div class="theme-grid">
+            <div class="theme-option" data-theme="default">
+                <div class="theme-preview default-theme"></div>
+                <span>默认</span>
+            </div>
+            <div class="theme-option" data-theme="dark">
+                <div class="theme-preview dark-theme"></div>
+                <span>暗黑</span>
+            </div>
+            <div class="theme-option" data-theme="blue">
+                <div class="theme-preview blue-theme"></div>
+                <span>海洋蓝</span>
+            </div>
+            <div class="theme-option" data-theme="green">
+                <div class="theme-preview green-theme"></div>
+                <span>森林绿</span>
+            </div>
+            <div class="theme-option" data-theme="purple">
+                <div class="theme-preview purple-theme"></div>
+                <span>优雅紫</span>
+            </div>
+            <div class="theme-option" data-theme="orange">
+                <div class="theme-preview orange-theme"></div>
+                <span>活力橙</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右键菜单 -->
+    <div id="contextMenu" class="context-menu">
+        <div class="menu-item" data-action="edit">✏️ 编辑</div>
+        <div class="menu-item" data-action="delete">🗑️ 删除</div>
+        <div class="menu-separator"></div>
+        <div class="menu-item" data-action="priority-high">🔴 设为高优先级</div>
+        <div class="menu-item" data-action="priority-medium">🟡 设为中优先级</div>
+        <div class="menu-item" data-action="priority-low">🟢 设为低优先级</div>
+    </div>
+
+    <!-- 拖拽时的幽灵元素 -->
+    <div id="dragGhost" class="drag-ghost"></div>
+
+    <!-- 提示消息 -->
+    <div id="toast" class="toast"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
