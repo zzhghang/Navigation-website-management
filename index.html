@@ -20,11 +20,13 @@
                 </div>
             </div>
             <div class="header-right">
+                <button id="bgToggle" class="btn-icon" title="切换背景">🖼️</button>
                 <button id="themeToggle" class="btn-icon" title="切换主题">🎨</button>
                 <button id="exportBtn" class="btn-icon" title="导出数据">📤</button>
                 <button id="importBtn" class="btn-icon" title="导入数据">📥</button>
                 <button id="historyBtn" class="btn-icon" title="活动历史">📋</button>
                 <input type="file" id="importFile" accept=".json" style="display: none;">
+                <input type="file" id="bgFile" accept="image/*" style="display: none;">
             </div>
         </header>
 
@@ -195,6 +197,32 @@
                 <span>活力橙</span>
             </div>
         </div>
+    </div>
+
+    <!-- 背景设置面板 -->
+    <div id="bgPanel" class="bg-panel">
+        <h4>背景设置</h4>
+        <div class="bg-options">
+            <div class="bg-option" data-bg="none">
+                <div class="bg-preview bg-none"></div>
+                <span>无背景</span>
+            </div>
+            <div class="bg-option" data-bg="blur">
+                <div class="bg-preview bg-blur"></div>
+                <span>毛玻璃</span>
+            </div>
+            <div class="bg-option" data-bg="dark">
+                <div class="bg-preview bg-dark"></div>
+                <span>暗色遮罩</span>
+            </div>
+        </div>
+        <div class="bg-upload">
+            <button class="btn-primary btn-full" onclick="document.getElementById('bgFile').click()">
+                📁 上传自定义背景
+            </button>
+            <p class="bg-hint">支持 JPG、PNG 格式，建议 1920x1080 以上</p>
+        </div>
+        <div id="bgPreview" class="bg-current-preview"></div>
     </div>
 
     <!-- 右键菜单 -->

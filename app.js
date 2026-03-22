@@ -27,6 +27,7 @@ const AppState = {
 const STORAGE_KEY = 'navManager_data';
 const THEME_KEY = 'navManager_theme';
 const HISTORY_KEY = 'navManager_history';
+const BG_KEY = 'navManager_background';
 
 // ==================== Preset Icons ====================
 const PRESET_ICONS = {
@@ -46,6 +47,7 @@ const PRESET_ICONS = {
 document.addEventListener('DOMContentLoaded', () => {
     loadData();
     loadTheme();
+    loadBackground();
     loadHistory();
     initEventListeners();
     ensureCurrentTab();
@@ -121,6 +123,50 @@ function saveTheme(theme) {
     localStorage.setItem(THEME_KEY, theme);
 }
 
+function loadBackground() {
+    try {
+        const saved = localStorage.getItem(BG_KEY);
+        if (saved) {
+            const bgData = JSON.parse(saved);
+            applyBackground(bgData);
+        }
+    } catch (e) {
+        console.error('Failed to load background:', e);
+    }
+}
+
+function saveBackground(bgData) {
+    try {
+        localStorage.setItem(BG_KEY, JSON.stringify(bgData));
+    } catch (e) {
+        console.error('Failed to save background:', e);
+        showToast('背景保存失败', 'error');
+    }
+}
+
+function applyBackground(bgData) {
+    const body = document.body;
+
+    // Remove existing background classes
+    body.classList.remove('has-custom-bg', 'bg-overlay-none', 'bg-overlay-blur', 'bg-overlay-dark');
+    body.style.backgroundImage = '';
+
+    if (!bgData || bgData.type === 'none') {
+        return;
+    }
+
+    if (bgData.type === 'custom' && bgData.image) {
+        body.classList.add('has-custom-bg');
+        body.style.backgroundImage = `url(${bgData.image})`;
+
+        // Only apply overlay when there's a custom background
+        const overlay = bgData.overlay || 'none';
+        if (overlay !== 'none') {
+            body.classList.add(`bg-overlay-${overlay}`);
+        }
+    }
+}
+
 function loadHistory() {
     try {
         const saved = localStorage.getItem(HISTORY_KEY);
@@ -185,6 +231,15 @@ function initEventListeners() {
         toggleThemePanel();
     });
 
+    // Background toggle
+    document.getElementById('bgToggle').addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleBgPanel();
+    });
+
+    // Background file upload
+    document.getElementById('bgFile').addEventListener('change', handleBgFileSelect);
+
     // Export/Import
     document.getElementById('exportBtn').addEventListener('click', exportData);
     document.getElementById('importBtn').addEventListener('click', () => {
@@ -239,6 +294,15 @@ function initEventListeners() {
     document.addEventListener('click', (e) => {
         const panel = document.getElementById('themePanel');
         const toggle = document.getElementById('themeToggle');
+        if (!panel.contains(e.target) && e.target !== toggle) {
+            panel.classList.remove('active');
+        }
+    });
+
+    // Close background panel on outside click
+    document.addEventListener('click', (e) => {
+        const panel = document.getElementById('bgPanel');
+        const toggle = document.getElementById('bgToggle');
         if (!panel.contains(e.target) && e.target !== toggle) {
             panel.classList.remove('active');
         }
@@ -875,6 +939,116 @@ function updateStatus() {
 
 function toggleThemePanel() {
     document.getElementById('themePanel').classList.toggle('active');
+}
+
+// ==================== Background Panel ====================
+function toggleBgPanel() {
+    const panel = document.getElementById('bgPanel');
+    const isActive = panel.classList.contains('active');
+
+    if (!isActive) {
+        renderBgPanel();
+        panel.classList.add('active');
+    } else {
+        panel.classList.remove('active');
+    }
+}
+
+function renderBgPanel() {
+    const panel = document.getElementById('bgPanel');
+
+    // Get current background settings
+    let currentBg = { type: 'none', overlay: 'none' };
+    try {
+        const saved = localStorage.getItem(BG_KEY);
+        if (saved) {
+            currentBg = JSON.parse(saved);
+        }
+    } catch (e) {
+        console.error('Failed to load background:', e);
+    }
+
+    // Update overlay options active state
+    panel.querySelectorAll('.bg-option').forEach(option => {
+        option.classList.toggle('active', option.dataset.bg === currentBg.overlay);
+    });
+
+    // Add click handlers for overlay options
+    panel.querySelectorAll('.bg-option').forEach(option => {
+        option.addEventListener('click', () => {
+            const overlay = option.dataset.bg;
+            // Only allow overlay effects when there's a custom background
+            if (overlay !== 'none' && currentBg.type !== 'custom') {
+                showToast('请先上传自定义背景', 'error');
+                return;
+            }
+            const bgData = { ...currentBg, overlay };
+            applyBackground(bgData);
+            saveBackground(bgData);
+            renderBgPanel();
+            showToast('背景效果已更新');
+        });
+    });
+
+    // Show current background preview
+    const previewContainer = document.getElementById('bgPreview');
+    if (currentBg.type === 'custom' && currentBg.image) {
+        previewContainer.innerHTML = `
+            <img src="${currentBg.image}" alt="当前背景">
+            <div class="bg-info">当前自定义背景</div>
+            <button class="btn-danger btn-small" onclick="removeBackground()" style="margin-top: 0.5rem; width: 100%;">移除背景</button>
+        `;
+    } else {
+        previewContainer.innerHTML = '';
+    }
+}
+
+function handleBgFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Check file type
+    if (!file.type.startsWith('image/')) {
+        showToast('请选择图片文件', 'error');
+        return;
+    }
+
+    // Check file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+        showToast('图片大小不能超过2MB', 'error');
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const dataUrl = e.target.result;
+        const bgData = {
+            type: 'custom',
+            image: dataUrl,
+            overlay: 'blur'
+        };
+        applyBackground(bgData);
+        saveBackground(bgData);
+        renderBgPanel();
+        showToast('背景已设置');
+        addHistory('设置自定义背景');
+    };
+    reader.onerror = () => {
+        showToast('读取文件失败', 'error');
+    };
+    reader.readAsDataURL(file);
+
+    // Clear file input
+    event.target.value = '';
+}
+
+function removeBackground() {
+    const bgData = { type: 'none', overlay: 'none' };
+    applyBackground(bgData);
+    saveBackground(bgData);
+    renderBgPanel();
+    showToast('背景已移除');
+    addHistory('移除背景');
 }
 
 // ==================== Icon Picker ====================
