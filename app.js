@@ -11,6 +11,7 @@ const AppState = {
     draggedItem: null,
     draggedTab: null,
     theme: 'default',
+    searchKeyword: '',
     data: {
         boards: {
             default: {
@@ -121,6 +122,16 @@ function saveTheme(theme) {
     AppState.theme = theme;
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem(THEME_KEY, theme);
+    // 记录主题切换
+    const themeNames = {
+        'default': '默认',
+        'dark': '暗黑',
+        'blue': '海洋蓝',
+        'green': '森林绿',
+        'purple': '优雅紫',
+        'orange': '活力橙'
+    };
+    addHistory('切换主题', themeNames[theme] || theme);
 }
 
 function loadBackground() {
@@ -215,6 +226,44 @@ function addHistory(action, details = '') {
 
 // ==================== Event Listeners ====================
 function initEventListeners() {
+    // Search functionality
+    const searchInput = document.getElementById('searchInput');
+    const searchClear = document.getElementById('searchClear');
+    
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            AppState.searchKeyword = e.target.value.trim().toLowerCase();
+            updateSearchUI();
+            renderNavItems();
+        });
+        
+        // Keyboard shortcut: Ctrl/Cmd + K to focus search
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                searchInput.focus();
+            }
+            // ESC to clear search
+            if (e.key === 'Escape' && document.activeElement === searchInput) {
+                searchInput.value = '';
+                AppState.searchKeyword = '';
+                updateSearchUI();
+                renderNavItems();
+                searchInput.blur();
+            }
+        });
+    }
+    
+    if (searchClear) {
+        searchClear.addEventListener('click', () => {
+            searchInput.value = '';
+            AppState.searchKeyword = '';
+            updateSearchUI();
+            renderNavItems();
+            searchInput.focus();
+        });
+    }
+
     // Board selector
     document.getElementById('boardSelect').addEventListener('change', (e) => {
         switchBoard(e.target.value);
@@ -313,12 +362,60 @@ function initEventListeners() {
     document.getElementById('tabIconFile').addEventListener('change', (e) => handleIconFileSelect(e, 'tabIcon', 'tabIconPreview'));
 }
 
+// ==================== Search Functions ====================
+function updateSearchUI() {
+    const searchClear = document.getElementById('searchClear');
+    const searchStats = document.getElementById('searchStats');
+    
+    if (searchClear) {
+        searchClear.classList.toggle('visible', AppState.searchKeyword.length > 0);
+    }
+    
+    if (searchStats) {
+        if (AppState.searchKeyword) {
+            const matchCount = getSearchMatchCount();
+            searchStats.textContent = `找到 ${matchCount} 个匹配项`;
+        } else {
+            searchStats.textContent = '';
+        }
+    }
+}
+
+function getSearchMatchCount() {
+    const board = AppState.data.boards[AppState.currentBoard];
+    if (!AppState.currentTab) return 0;
+    
+    const items = board.items[AppState.currentTab] || [];
+    const keyword = AppState.searchKeyword;
+    
+    if (!keyword) return items.length;
+    
+    return items.filter(item => {
+        const nameMatch = item.name.toLowerCase().includes(keyword);
+        const urlMatch = item.url.toLowerCase().includes(keyword);
+        const categoryMatch = item.category && item.category.toLowerCase().includes(keyword);
+        return nameMatch || urlMatch || categoryMatch;
+    }).length;
+}
+
+function matchesSearch(item) {
+    if (!AppState.searchKeyword) return true;
+    
+    const keyword = AppState.searchKeyword;
+    const nameMatch = item.name.toLowerCase().includes(keyword);
+    const urlMatch = item.url.toLowerCase().includes(keyword);
+    const categoryMatch = item.category && item.category.toLowerCase().includes(keyword);
+    
+    return nameMatch || urlMatch || categoryMatch;
+}
+
 // ==================== Rendering ====================
 function render() {
     renderBoardSelector();
     renderTabs();
     renderNavItems();
     updateStatus();
+    updateSearchUI();
 }
 
 function renderBoardSelector() {
@@ -441,16 +538,31 @@ function renderNavItems() {
         return;
     }
 
-    const items = board.items[AppState.currentTab] || [];
+    let items = board.items[AppState.currentTab] || [];
+
+    // Filter items by search keyword
+    if (AppState.searchKeyword) {
+        items = items.filter(item => matchesSearch(item));
+    }
 
     if (items.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-state-icon">📝</div>
-                <div class="empty-state-text">暂无导航项</div>
-                <button class="btn-primary" onclick="openItemModal()">添加导航项</button>
-            </div>
-        `;
+        if (AppState.searchKeyword) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">🔍</div>
+                    <div class="empty-state-text">未找到匹配的导航项</div>
+                    <button class="btn-secondary" onclick="clearSearch()">清除搜索</button>
+                </div>
+            `;
+        } else {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">📝</div>
+                    <div class="empty-state-text">暂无导航项</div>
+                    <button class="btn-primary" onclick="openItemModal()">添加导航项</button>
+                </div>
+            `;
+        }
         return;
     }
 
@@ -485,6 +597,17 @@ function renderNavItems() {
         section.appendChild(grid);
         container.appendChild(section);
     });
+}
+
+function clearSearch() {
+    AppState.searchKeyword = '';
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    updateSearchUI();
+    renderNavItems();
+    addHistory('清除搜索');
 }
 
 function createNavItemElement(item) {
@@ -572,14 +695,32 @@ function switchBoard(boardId) {
     AppState.currentBoard = boardId;
     const board = AppState.data.boards[boardId];
     AppState.currentTab = board.tabs.length > 0 ? board.tabs[0].id : null;
+    // Clear search when switching boards
+    AppState.searchKeyword = '';
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.value = '';
+    }
     render();
     addHistory('切换看板', board.name);
 }
 
 function switchTab(tabId) {
+    const board = AppState.data.boards[AppState.currentBoard];
+    const tab = board.tabs.find(t => t.id === tabId);
     AppState.currentTab = tabId;
     AppState.selectedItem = null;
+    // Clear search when switching tabs
+    AppState.searchKeyword = '';
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.value = '';
+    }
     render();
+    // 记录切换标签
+    if (tab) {
+        addHistory('切换标签', tab.name);
+    }
 }
 
 function selectItem(itemId) {
@@ -1398,28 +1539,113 @@ function showHistory() {
     if (AppState.history.length === 0) {
         list.innerHTML = '<div class="empty-state"><div class="empty-state-text">暂无活动记录</div></div>';
     } else {
-        // Show in reverse order (newest first)
-        [...AppState.history].reverse().forEach(entry => {
-            const item = document.createElement('div');
-            item.className = 'history-item';
+        // Group by date
+        const grouped = groupHistoryByDate(AppState.history);
+        
+        Object.entries(grouped).forEach(([date, entries]) => {
+            // Date header
+            const dateHeader = document.createElement('div');
+            dateHeader.className = 'history-date-header';
+            dateHeader.textContent = date;
+            list.appendChild(dateHeader);
+            
+            // Entries for this date
+            entries.reverse().forEach(entry => {
+                const item = document.createElement('div');
+                item.className = 'history-item';
 
-            const time = new Date(entry.time);
-            const timeStr = time.toLocaleString('zh-CN', {
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
+                const time = new Date(entry.time);
+                const timeStr = time.toLocaleString('zh-CN', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                const icon = getHistoryIcon(entry.action);
+                
+                item.innerHTML = `
+                    <span class="history-time">${timeStr}</span>
+                    <span class="history-icon">${icon}</span>
+                    <span class="history-action">
+                        ${escapeHtml(entry.action)}
+                        ${entry.details ? `<span class="history-details">${escapeHtml(entry.details)}</span>` : ''}
+                    </span>
+                `;
+                list.appendChild(item);
             });
-
-            item.innerHTML = `
-                <span class="history-time">${timeStr}</span>
-                <span class="history-action">${escapeHtml(entry.action)}${entry.details ? ` - ${escapeHtml(entry.details)}` : ''}</span>
-            `;
-            list.appendChild(item);
         });
     }
 
     openModal('historyModal');
+}
+
+function groupHistoryByDate(history) {
+    const grouped = {};
+    const today = new Date().toDateString();
+    const yesterday = new Date(Date.now() - 86400000).toDateString();
+    
+    history.forEach(entry => {
+        const date = new Date(entry.time);
+        const dateStr = date.toDateString();
+        let label;
+        
+        if (dateStr === today) {
+            label = '今天';
+        } else if (dateStr === yesterday) {
+            label = '昨天';
+        } else {
+            label = date.toLocaleDateString('zh-CN', {
+                month: 'short',
+                day: 'numeric',
+                weekday: 'short'
+            });
+        }
+        
+        if (!grouped[label]) {
+            grouped[label] = [];
+        }
+        grouped[label].push(entry);
+    });
+    
+    // Sort dates (today first, then yesterday, then older)
+    const sortedKeys = Object.keys(grouped).sort((a, b) => {
+        if (a === '今天') return -1;
+        if (b === '今天') return 1;
+        if (a === '昨天') return -1;
+        if (b === '昨天') return 1;
+        return 0;
+    });
+    
+    const sorted = {};
+    sortedKeys.forEach(key => {
+        sorted[key] = grouped[key];
+    });
+    
+    return sorted;
+}
+
+function getHistoryIcon(action) {
+    const icons = {
+        '切换看板': '📋',
+        '切换标签': '🏷️',
+        '创建看板': '📋',
+        '创建标签': '🏷️',
+        '更新标签': '🏷️',
+        '删除标签': '🗑️',
+        '创建导航项': '🔗',
+        '更新导航项': '✏️',
+        '删除导航项': '🗑️',
+        '更新优先级': '⚡',
+        '重新排序标签': '↔️',
+        '重新排序导航项': '↔️',
+        '切换主题': '🎨',
+        '设置自定义背景': '🖼️',
+        '移除背景': '🖼️',
+        '导出数据': '📤',
+        '导入数据': '📥',
+        '清空历史': '🗑️',
+        '清除搜索': '🔍'
+    };
+    return icons[action] || '•';
 }
 
 function clearHistory() {
